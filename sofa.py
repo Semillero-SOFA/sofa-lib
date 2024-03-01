@@ -458,6 +458,24 @@ def sync_signals(tx: np.ndarray, rx: np.ndarray) -> tuple[np.ndarray, np.ndarray
     return sync_signal, rx
 
 
+def find_root(path):
+    """
+    Finds the root directory of the Git repository containing the given path.
+
+    Args:
+      path: The path to a file or directory within the Git repository.
+
+    Returns:
+      The absolute path to the Git repository root directory, or None if not found.
+    """
+    while not os.path.isdir(os.path.join(path, ".git")):
+        new_path = os.path.dirname(path)
+        if new_path == path:
+            return None
+        path = new_path
+    return path
+
+
 def __do_backup(filename: str, n_backups: int = 0) -> None:
     """
     Perform backup rotation for a file.
