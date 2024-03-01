@@ -6,6 +6,7 @@ from collections import defaultdict
 import h5py
 import numpy as np
 import scipy as sp
+from pathlib import Path
 from sklearn.cluster import KMeans
 from sklearn.model_selection import GridSearchCV, KFold, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
@@ -299,7 +300,8 @@ def classifier_model(
 
     for i, layer_props in enumerate(layers_props_lst):
         if i == 0:
-            model.add(tf.keras.layers.Dense(input_dim=input_dim, **layer_props))
+            model.add(tf.keras.layers.Dense(
+                input_dim=input_dim, **layer_props))
         else:
             model.add(tf.keras.layers.Dense(**layer_props))
 
@@ -458,21 +460,21 @@ def sync_signals(tx: np.ndarray, rx: np.ndarray) -> tuple[np.ndarray, np.ndarray
     return sync_signal, rx
 
 
-def find_root(path):
+def find_root(path: Path) -> Path | None:
     """
     Finds the root directory of the Git repository containing the given path.
 
     Args:
-      path: The path to a file or directory within the Git repository.
+        path: The path to a file or directory within the Git repository.
 
     Returns:
-      The absolute path to the Git repository root directory, or None if not found.
+        The path to the Git repository root directory, or None if not found.
     """
-    while not os.path.isdir(os.path.join(path, ".git")):
-        new_path = os.path.dirname(path)
-        if new_path == path:
-            return None
-        path = new_path
+    while not (path / ".git").is_dir():
+        new_path = path.parent
+    if new_path == path:
+        return None
+    path = new_path
     return path
 
 
@@ -615,7 +617,8 @@ def load_hdf5(filename: str):
                     data_dict[key] = load_dict(group[key])
                 elif isinstance(group[key], h5py.Dataset):
                     if key == "model":
-                        data_dict[key] = json.loads(group[key][()].decode("utf-8"))
+                        data_dict[key] = json.loads(
+                            group[key][()].decode("utf-8"))
                     else:
                         data_dict[key] = group[key][()]
             return data_dict
