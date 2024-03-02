@@ -463,7 +463,7 @@ def sync_signals(tx: np.ndarray, rx: np.ndarray) -> tuple[np.ndarray, np.ndarray
     return sync_signal, rx
 
 
-def find_git_root() -> Path:
+def find_root() -> Path:
     """
     Find the root directory of the Git project.
 
