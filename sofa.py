@@ -2,16 +2,18 @@ import json
 import os
 import warnings
 from collections import defaultdict
+from pathlib import Path
 
 import h5py
 import numpy as np
 import scipy as sp
-from pathlib import Path
+import subprocess
 from joblib import dump, load
 from sklearn.cluster import KMeans
 from sklearn.model_selection import GridSearchCV, KFold, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
+
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=ImportWarning)
@@ -461,22 +463,31 @@ def sync_signals(tx: np.ndarray, rx: np.ndarray) -> tuple[np.ndarray, np.ndarray
     return sync_signal, rx
 
 
-def find_root(path: Path) -> Path | None:
+def find_git_root() -> Path:
     """
-    Finds the root directory of the Git repository containing the given path.
-
-    Args:
-        path: The path to a file or directory within the Git repository.
+    Find the root directory of the Git project.
 
     Returns:
-        The path to the Git repository root directory, or None if not found.
+        Path: The absolute path of the Git root directory, or None if not found.
     """
-    while not (path / ".git").is_dir():
-        new_path = path.parent
-    if new_path == path:
+    try:
+        # Run 'git rev-parse --show-toplevel' to get the root directory
+        result = subprocess.run(['git', 'rev-parse', '--show-toplevel'],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True)
+
+        # Check if the command was successful
+        if result.returncode == 0:
+            return Path(result.stdout.strip())
+        else:
+            # Git command failed, print the error message
+            print("Error:", result.stderr.strip())
+            return None
+
+    except Exception as e:
+        # Handle exceptions, e.g., subprocess.CalledProcessError
+        print("Exception:", str(e))
         return None
-    path = new_path
-    return path
 
 
 def __do_backup(filename: str, n_backups: int = 0) -> None:
