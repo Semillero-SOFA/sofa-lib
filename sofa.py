@@ -1,6 +1,5 @@
 import json
 import os
-import warnings
 from collections import defaultdict
 from pathlib import Path
 
@@ -8,6 +7,7 @@ import h5py
 import numpy as np
 import scipy as sp
 import subprocess
+import tensorflow as tf
 from joblib import dump, load
 from sklearn.cluster import KMeans
 from sklearn.model_selection import GridSearchCV, KFold, train_test_split
@@ -15,9 +15,6 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", category=ImportWarning)
-    import tensorflow as tf
 
 """
 Demodulation dictionary for 16-QAM symbols.
