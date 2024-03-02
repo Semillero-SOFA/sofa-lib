@@ -7,6 +7,7 @@ import h5py
 import numpy as np
 import scipy as sp
 from pathlib import Path
+from joblib import dump, load
 from sklearn.cluster import KMeans
 from sklearn.model_selection import GridSearchCV, KFold, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
@@ -626,3 +627,15 @@ def load_hdf5(filename: str):
         loaded_data = load_dict(f)
 
     return loaded_data
+
+
+def joblib_load(file):
+    try:
+        return load(file)
+    except FileNotFoundError:
+        print(f"[ERROR]: File {file} not found")
+        return None
+
+
+def joblib_save(var, file):
+    dump(var, file)
