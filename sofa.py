@@ -15,7 +15,6 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
 
-
 """
 Demodulation dictionary for 16-QAM symbols.
 
@@ -282,7 +281,7 @@ def demodulate_kmeans(X_rx: np.ndarray, mod_dict: dict, n_splits: int = 5) -> tu
 
 
 def classifier_model(
-    layers_props_lst: list, loss_fn: tf.keras.losses.Loss, input_dim: int
+    layers_props_lst: list, loss_fn: tf.keras.losses.Loss, input_dim: int, n_classes: int
 ) -> tf.keras.models.Sequential:
     """
     Creates a neural network classifier model with specified layers and loss function.
@@ -305,7 +304,7 @@ def classifier_model(
         else:
             model.add(tf.keras.layers.Dense(**layer_props))
 
-    model.add(tf.keras.layers.Dense(units=16, activation="softmax"))
+    model.add(tf.keras.layers.Dense(units=n_classes, activation="softmax"))
 
     model.compile(loss=loss_fn, optimizer="adam")
 
@@ -487,23 +486,50 @@ def find_root() -> Path:
         return None
 
 
+def __should_skip_save(filename: str, n_backups: int = -1) -> bool:
+    """
+    Checks if saving a file should be skipped based on n_backups and file existence.
+
+    Args:
+        filename (str): The name of the file to check.
+        n_backups (int, optional): The number of backups to keep (affects skipping). Defaults to -1.
+
+    Returns:
+        bool: True if saving should be skipped, False otherwise.
+    """
+    if n_backups == -1 and os.path.exists(filename):
+        print(f"Skipping saving {filename} (n_backups=-1 and file exists).")
+        return True
+    else:
+        return False
+
+
 def __do_backup(filename: str, n_backups: int = 0) -> None:
     """
-    Perform backup rotation for a file.
+    Perform backup rotation for a file, keeping a specified number of backups.
 
     Parameters:
         filename (str): The name of the file to create or overwrite.
-        n_backups (int): The number of backup files to keep.
+        n_backups (int, optional): The number of backup files to keep. Defaults to 0.
+            - **-1**: Skips backup entirely (no changes made).
+            - **0**: Overwrites the existing file (no backups kept).
+            - **Positive value**:
+                - Rotates existing backups to keep no more than `n_backups` versions.
+                - Creates a new backup of the original file (if it exists) with the highest index.
 
     Returns:
         None
     """
-
     # Function to get backup filenames
     def backup_filename(index):
         return f"{filename}.bak{index}"
 
-    # Backup existing files
+    # Check for n_backups sentinel value (-1) to skip backup logic
+    if n_backups == -1:
+        print(f"Skipping backup for {filename} (n_backups=-1).")
+        return
+
+    # Backup logic for positive n_backups
     for i in range(n_backups, 0, -1):
         src = backup_filename(i - 1) if i - 1 > 0 else filename
         dst = backup_filename(i)
@@ -517,12 +543,21 @@ def save_json(data: dict, filename: str, n_backups: int = 3) -> None:
     Parameters:
         data (dict): A dictionary containing datasets to be saved.
         filename (str): The name of the JSON file to create or overwrite.
-        n_backups (int): The number of backup files to keep.
+        n_backups (int, optional): The number of backup files to keep. Defaults to 3.
+            - **-1**: Skips saving entirely if the file already exists.
+            - **0**: Overwrites the existing file (no backups kept).
+            - **Positive value**:
+                - Performs backup rotation using `__do_backup`.
+                - Overwrites the existing file with the new data.
 
     Returns:
         None
     """
-    # Do backup rotation before writing
+    # Check for n_backups and handle skipping if necessary
+    if __should_skip_save(filename, n_backups):
+        return
+
+    # Perform backup rotation (unless skipped)
     __do_backup(filename, n_backups)
 
     try:
@@ -543,7 +578,6 @@ def load_json(filename: str) -> dict:
     Returns:
         defaultdict: A nested defaultdict containing the loaded data.
     """
-
     def dict_factory():
         return defaultdict(dict_factory)
 
@@ -566,12 +600,21 @@ def save_hdf5(data: dict, filename: str, n_backups: int = 3) -> None:
     Parameters:
         data (dict): A dictionary containing datasets to be saved.
         filename (str): The name of the HDF5 file to create or overwrite.
-        n_backups (int): The number of backup files to keep.
+        n_backups (int, optional): The number of backup files to keep. Defaults to 3.
+            - -1: Skips saving entirely if the file already exists.
+            - 0: Overwrites the existing file (no backups kept).
+            - Positive value:
+                - Performs backup rotation using `__do_backup`.
+                - Overwrites the existing file with the new data.
 
     Returns:
         None
     """
-    # Do backup rotation before writing
+    # Check for n_backups and handle skipping if necessary
+    if __should_skip_save(filename, n_backups):
+        return
+
+    # Perform backup rotation (unless skipped)
     __do_backup(filename, n_backups)
 
     try:
@@ -584,18 +627,19 @@ def save_hdf5(data: dict, filename: str, n_backups: int = 3) -> None:
                         subgroup = group.create_group(key)
                         store_dict(subgroup, value)
                     elif key == "model":
-                        # Save 'model' key as JSON
+                        # Save model as JSON
                         group.create_dataset(key, data=json.dumps(value))
                     elif key in {"loss", "train", "test", "prod"}:
-                        # Save each k-fold score in a separate group
+                        # Save k-fold scores in separate groups
                         scores_group = group.create_group(key)
                         for i, vector in enumerate(value, start=1):
                             scores_group.create_dataset(str(i), data=vector)
                     else:
-                        # Save other keys as numpy arrays
+                        # Save other keys as NumPy arrays
                         group.create_dataset(key, data=value)
 
             store_dict(f, data)
+
     except Exception as e:
         raise RuntimeError(f"Error: {e}")
 
