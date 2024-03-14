@@ -1,5 +1,5 @@
 # Semillero de Óptica y Fotónica Aplicada
-This Python module provides a collection of reusable functions commonly used in the 'Semillero' project for simulating and analyzing communication systems. It offers functionalities for:
+This Python module provides a collection of reusable functions commonly used in the 'Semillero de Óptica y Fotónica Aplicada' (SOFA) research group for simulating and analyzing communication systems. It offers functionalities for:
 - Modulation and Demodulation:
     - Normalization of various modulation formats.
     - Standard demodulation procedures with constellation boundary checking.
