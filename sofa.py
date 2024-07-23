@@ -1,5 +1,7 @@
 import json
 import os
+import logging
+
 from collections import defaultdict
 from pathlib import Path
 
@@ -14,6 +16,31 @@ from sklearn.model_selection import GridSearchCV, KFold, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
+
+def setup_logger(name: str) -> logging.Logger:
+    # Logger setup
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+
+    # Create file handler which logs debug messages
+    fh = logging.FileHandler('utils.log')
+    fh.setLevel(logging.DEBUG)
+
+    # Create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.ERROR)
+
+    # Create formatter and add it to the handlers
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    return logger
+
+
+# Initialize logger
+logger = setup_logger(__name__)
 
 """
 Demodulation dictionary for 16-QAM symbols.
@@ -477,12 +504,12 @@ def find_root() -> Path:
             return Path(result.stdout.strip())
         else:
             # Git command failed, print the error message
-            print("Error:", result.stderr.strip())
+            logger.error(result.stderr.strip())
             return None
 
     except Exception as e:
         # Handle exceptions, e.g., subprocess.CalledProcessError
-        print("Exception:", str(e))
+        logger.error(str(e))
         return None
 
 
@@ -498,7 +525,7 @@ def __should_skip_save(filename: str, n_backups: int = -1) -> bool:
         bool: True if saving should be skipped, False otherwise.
     """
     if n_backups == -1 and os.path.exists(filename):
-        print(f"Skipping saving {filename} (n_backups=-1 and file exists).")
+        logger.warn(f"Skipping saving {filename} (n_backups=-1 and file exists).")
         return True
     else:
         return False
@@ -526,7 +553,7 @@ def __do_backup(filename: str, n_backups: int = 0) -> None:
 
     # Check for n_backups sentinel value (-1) to skip backup logic
     if n_backups == -1:
-        print(f"Skipping backup for {filename} (n_backups=-1).")
+        logger.warn(f"Skipping backup for {filename} (n_backups=-1).")
         return
 
     # Backup logic for positive n_backups
@@ -685,7 +712,7 @@ def joblib_load(file):
     try:
         return load(file)
     except FileNotFoundError:
-        print(f"[ERROR]: File {file} not found")
+        logger.error(f"[ERROR]: File {file} not found")
         return None
 
 
