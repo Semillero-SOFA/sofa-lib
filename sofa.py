@@ -23,7 +23,7 @@ def setup_logger(name: str) -> logging.Logger:
     logger.setLevel(logging.DEBUG)
 
     # Create file handler which logs debug messages
-    fh = logging.FileHandler('utils.log')
+    fh = logging.FileHandler(f"{name}.log")
     fh.setLevel(logging.DEBUG)
 
     # Create console handler with a higher log level
@@ -35,6 +35,10 @@ def setup_logger(name: str) -> logging.Logger:
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
+
+    # Add handlers
+    logger.addHandler(fh)
+    logger.addHandler(ch)
 
     return logger
 
