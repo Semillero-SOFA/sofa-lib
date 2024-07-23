@@ -43,9 +43,6 @@ def setup_logger(name: str) -> logging.Logger:
     return logger
 
 
-# Initialize logger
-logger = setup_logger(__name__)
-
 """
 Demodulation dictionary for 16-QAM symbols.
 
