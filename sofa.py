@@ -16,33 +16,24 @@ from sklearn.model_selection import GridSearchCV, KFold, train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC
 
+FILENAME = os.path.basename(__file__)[:-3]
+
 
 def setup_logger(name: str) -> logging.Logger:
-    # Logger setup
+    # Setup logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),  # Log to console
+            logging.FileHandler(f"{name}.log")
+        ]
+    )
     logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-
-    # Create file handler which logs debug messages
-    fh = logging.FileHandler(f"{name}.log")
-    fh.setLevel(logging.DEBUG)
-
-    # Create console handler with a higher log level
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.ERROR)
-
-    # Create formatter and add it to the handlers
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-
-    # Add handlers
-    logger.addHandler(fh)
-    logger.addHandler(ch)
-
     return logger
 
-logger = setup_logger(__name__)
+
+logger = setup_logger(FILENAME)
 
 """
 Demodulation dictionary for 16-QAM symbols.
@@ -714,7 +705,7 @@ def joblib_load(file):
     try:
         return load(file)
     except FileNotFoundError:
-        logger.error(f"[ERROR]: File {file} not found")
+        logger.error(f"File {file} not found")
         return None
 
 
