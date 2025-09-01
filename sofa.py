@@ -1,6 +1,7 @@
 import json
-import os
 import logging
+import os
+import subprocess
 
 from collections import defaultdict
 from pathlib import Path
@@ -8,8 +9,8 @@ from pathlib import Path
 import h5py
 import numpy as np
 import scipy as sp
-import subprocess
 import tensorflow as tf
+import polars as pl
 from joblib import dump, load
 from sklearn.cluster import KMeans
 from sklearn.model_selection import GridSearchCV, KFold, train_test_split
@@ -23,11 +24,11 @@ def setup_logger(name: str) -> logging.Logger:
     # Setup logging
     logging.basicConfig(
         level=logging.DEBUG,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
             logging.StreamHandler(),  # Log to console
-            logging.FileHandler(f"{name}.log")
-        ]
+            logging.FileHandler(f"{name}.log"),
+        ],
     )
     logger = logging.getLogger(name)
     return logger
@@ -60,6 +61,38 @@ MOD_DICT = {
     14: 1 - 3j,  # 1110
     15: 1 - 1j,  # 1111
 }
+
+
+def load_16gbaud_db(path: Path) -> pl.DataFrame:
+    dfs = []
+    for directory in path.iterdir():
+        if directory.is_file():
+            continue
+        name = directory.name
+        GHz_index = name.find("GHz")
+        spacing = name[:GHz_index]
+        if GHz_index == -1:
+            spacing = "50"
+
+        for subdir in directory.iterdir():
+            if subdir.is_dir():
+                continue
+            name = subdir.name
+            consY_index = name.find("consY") + len("consY")
+            dB_index = name.find("dB")
+            osnr = name[consY_index:dB_index]
+
+            # Load CSV into DF and add spacing and OSNR columns
+            read_df = pl.read_csv(subdir, schema=[pl.Float64("I"), pl.Float64("Q")])
+            read_df = read_df.with_columns(
+                [
+                    pl.lit(float(spacing)).alias("Spacing"),
+                    pl.lit(float(osnr)).alias("OSNR"),
+                ]
+            )
+            dfs.append(read_df)
+        df = pl.concat(dfs, rechunk=True)
+    return df
 
 
 def mod_norm(const: np.ndarray, power: float = 1.0) -> float:
@@ -301,7 +334,10 @@ def demodulate_kmeans(X_rx: np.ndarray, mod_dict: dict, n_splits: int = 5) -> tu
 
 
 def classifier_model(
-    layers_props_lst: list, loss_fn: tf.keras.losses.Loss, input_dim: int, n_classes: int
+    layers_props_lst: list,
+    loss_fn: tf.keras.losses.Loss,
+    input_dim: int,
+    n_classes: int,
 ) -> tf.keras.models.Sequential:
     """
     Creates a neural network classifier model with specified layers and loss function.
@@ -319,8 +355,7 @@ def classifier_model(
 
     for i, layer_props in enumerate(layers_props_lst):
         if i == 0:
-            model.add(tf.keras.layers.Dense(
-                input_dim=input_dim, **layer_props))
+            model.add(tf.keras.layers.Dense(input_dim=input_dim, **layer_props))
         else:
             model.add(tf.keras.layers.Dense(**layer_props))
 
@@ -436,22 +471,6 @@ def bit_error_rate(sym_rx: np.ndarray, sym_tx: np.ndarray) -> float:
     return ber
 
 
-def curve_fit(f, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """
-    Calculates the optimal parameters given a function and data points to optimize.
-
-    Parameters:
-        f: Function to be optimized.
-        x: Coordinates on the x-axis.
-        y: Coordinates on the y-axis.
-
-    Returns:
-        np.ndarray: Optimized parameters to fit the function to the given coordinates.
-    """
-    popt, _ = sp.optimize.curve_fit(f, x, y)
-    return popt
-
-
 def sync_signals(tx: np.ndarray, rx: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Synchronizes two signals.
@@ -479,6 +498,22 @@ def sync_signals(tx: np.ndarray, rx: np.ndarray) -> tuple[np.ndarray, np.ndarray
     return sync_signal, rx
 
 
+def curve_fit(f, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """
+    Calculates the optimal parameters given a function and data points to optimize.
+
+    Parameters:
+        f: Function to be optimized.
+        x: Coordinates on the x-axis.
+        y: Coordinates on the y-axis.
+
+    Returns:
+        np.ndarray: Optimized parameters to fit the function to the given coordinates.
+    """
+    popt, _ = sp.optimize.curve_fit(f, x, y)
+    return popt
+
+
 def find_root() -> Path:
     """
     Find the root directory of the Git project.
@@ -488,9 +523,12 @@ def find_root() -> Path:
     """
     try:
         # Run 'git rev-parse --show-toplevel' to get the root directory
-        result = subprocess.run(['git', 'rev-parse', '--show-toplevel'],
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                text=True)
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
 
         # Check if the command was successful
         if result.returncode == 0:
@@ -540,6 +578,7 @@ def __do_backup(filename: str, n_backups: int = 0) -> None:
     Returns:
         None
     """
+
     # Function to get backup filenames
     def backup_filename(index):
         return f"{filename}.bak{index}"
@@ -598,6 +637,7 @@ def load_json(filename: str) -> dict:
     Returns:
         defaultdict: A nested defaultdict containing the loaded data.
     """
+
     def dict_factory():
         return defaultdict(dict_factory)
 
@@ -615,6 +655,7 @@ def load_json(filename: str) -> dict:
 
 def save_hdf5(data: dict, filename: str, n_backups: int = 3) -> None:
     """
+    DEPRECATED: old structure was too complex
     Save data to an HDF5 file with backup rotation.
 
     Parameters:
@@ -666,6 +707,7 @@ def save_hdf5(data: dict, filename: str, n_backups: int = 3) -> None:
 
 def load_hdf5(filename: str):
     """
+    DEPRECATED: old structure was too complex
     Load data from an HDF5 file.
     This function recursively loads data from an HDF5 file.
 
@@ -690,8 +732,7 @@ def load_hdf5(filename: str):
                     data_dict[key] = load_dict(group[key])
                 elif isinstance(group[key], h5py.Dataset):
                     if key == "model":
-                        data_dict[key] = json.loads(
-                            group[key][()].decode("utf-8"))
+                        data_dict[key] = json.loads(group[key][()].decode("utf-8"))
                     else:
                         data_dict[key] = group[key][()]
             return data_dict
