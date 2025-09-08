@@ -8,11 +8,13 @@ including CSV, JSON, HDF5, and joblib pickle files, with backup functionality.
 import json
 import logging
 import os
+import re
 from collections import defaultdict
 from pathlib import Path
 
 import h5py
 import polars as pl
+from scipy.io import loadmat
 from joblib import dump, load
 
 
@@ -36,7 +38,8 @@ def load_16gbaud_db(path: Path) -> pl.DataFrame:
             osnr = name[consY_index:dB_index]
 
             # Load CSV into DF and add spacing and OSNR columns
-            read_df = pl.read_csv(subdir, schema=[pl.Float64("I"), pl.Float64("Q")])
+            read_df = pl.read_csv(
+                subdir, schema={"I": pl.Float64, "Q": pl.Float64})
             read_df = read_df.with_columns(
                 [
                     pl.lit(float(spacing)).alias("Spacing"),
@@ -46,6 +49,67 @@ def load_16gbaud_db(path: Path) -> pl.DataFrame:
             dfs.append(read_df)
         df = pl.concat(dfs, rechunk=True)
     return df
+
+
+def load_32gbaud_db(
+    path: Path, full: bool = False, subfolder: str = "0km_0dBm"
+) -> pl.DataFrame:
+    # Check subfolder parameter
+    if subfolder not in ["0km_0dBm", "270km_0dBm", "270km_9dBm"]:
+        raise ValueError("Invalid subfolder name.")
+
+    METADATA_PATTERN = re.compile(
+        r"Song\d+_[XY]_"  # Match the prefix (e.g., Song1_X or Song1_Y)
+        # Match OSNR (integer or decimal with 'p')
+        r"(?P<OSNR>[\d]+(?:p[\d]+)?)dB_"
+        # Match Spacing (integer or decimal with 'p')
+        r"(?P<Spacing>[\d]+(?:p[\d]+)?)GHz_"
+        # Match Distance (integer or decimal with 'p')
+        r"(?P<Distance>[\d]+(?:p[\d]+)?)km_"
+        # Match Power (integer or decimal with 'p')
+        r"(?P<Power>[\d]+(?:p[\d]+)?)dBm"
+    )
+    dfs = []
+    for directory in path.iterdir():
+        if not directory.is_dir():
+            continue
+        # Check directory name when not loading whole DB
+        if not full and directory.name != subfolder:
+            continue
+        for file_path in directory.rglob("*.mat"):
+            match = METADATA_PATTERN.search(file_path.name)
+            if not match:
+                raise ValueError(
+                    f"File name {
+                        file_path.name} does not match the expected pattern."
+                )
+
+            metadata = {
+                key: float(value.replace("p", "."))
+                for key, value in match.groupdict().items()
+            }
+
+            mat = loadmat(file_path)
+            mat = mat["rconst"][0]
+
+            I = mat.real
+            Q = mat.imag
+
+            df = pl.DataFrame(
+                {
+                    "I": I,
+                    "Q": Q,
+                    "Distance": metadata["Distance"],
+                    "Power": metadata["Power"],
+                    "OSNR": metadata["OSNR"],
+                    "Spacing": metadata["Spacing"],
+                }
+            )
+            dfs.append(df)
+
+    # Combinar todos los dataframes en uno solo
+    df_32gbd = pl.concat(dfs, rechunk=True)
+    return df_32gbd
 
 
 def __should_skip_save(filename: str, n_backups: int = -1) -> bool:
@@ -60,7 +124,9 @@ def __should_skip_save(filename: str, n_backups: int = -1) -> bool:
         bool: True if saving should be skipped, False otherwise.
     """
     if n_backups == -1 and os.path.exists(filename):
-        logging.getLogger(__name__).warning(f"Skipping saving {filename} (n_backups=-1 and file exists).")
+        logging.getLogger(__name__).warning(
+            f"Skipping saving {filename} (n_backups=-1 and file exists)."
+        )
         return True
     else:
         return False
@@ -89,7 +155,9 @@ def __do_backup(filename: str, n_backups: int = 0) -> None:
 
     # Check for n_backups sentinel value (-1) to skip backup logic
     if n_backups == -1:
-        logging.getLogger(__name__).warning(f"Skipping backup for {filename} (n_backups=-1).")
+        logging.getLogger(__name__).warning(
+            f"Skipping backup for {filename} (n_backups=-1)."
+        )
         return
 
     # Backup logic for positive n_backups
@@ -236,7 +304,8 @@ def load_hdf5(filename: str):
                     data_dict[key] = load_dict(group[key])
                 elif isinstance(group[key], h5py.Dataset):
                     if key == "model":
-                        data_dict[key] = json.loads(group[key][()].decode("utf-8"))
+                        data_dict[key] = json.loads(
+                            group[key][()].decode("utf-8"))
                     else:
                         data_dict[key] = group[key][()]
             return data_dict
