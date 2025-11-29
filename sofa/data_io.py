@@ -38,8 +38,7 @@ def load_16gbaud_db(path: Path) -> pl.DataFrame:
             osnr = name[consY_index:dB_index]
 
             # Load CSV into DF and add spacing and OSNR columns
-            read_df = pl.read_csv(
-                subdir, schema={"I": pl.Float64, "Q": pl.Float64})
+            read_df = pl.read_csv(subdir, schema={"I": pl.Float64, "Q": pl.Float64})
             read_df = read_df.with_columns(
                 [
                     pl.lit(float(spacing)).alias("Spacing"),
@@ -80,8 +79,7 @@ def load_32gbaud_db(
             match = METADATA_PATTERN.search(file_path.name)
             if not match:
                 raise ValueError(
-                    f"File name {
-                        file_path.name} does not match the expected pattern."
+                    f"File name {file_path.name} does not match the expected pattern."
                 )
 
             metadata = {
@@ -304,8 +302,7 @@ def load_hdf5(filename: str):
                     data_dict[key] = load_dict(group[key])
                 elif isinstance(group[key], h5py.Dataset):
                     if key == "model":
-                        data_dict[key] = json.loads(
-                            group[key][()].decode("utf-8"))
+                        data_dict[key] = json.loads(group[key][()].decode("utf-8"))
                     else:
                         data_dict[key] = group[key][()]
             return data_dict
